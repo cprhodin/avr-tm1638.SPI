@@ -82,101 +82,49 @@ static uint8_t state;
 static uint8_t * data;
 
 
-static void __TM1638_write_config(void)
+static void TM1638_command_dispatch(void)
 {
     if (!(GPIOR0 & TM1638_EV_BUSY))
     {
-        GPIOR0 |= TM1638_EV_BUSY;
-        pending_command &= ~TM1638_WRITE_CONFIG;
-
-        _delay_us(TM1638_DELAY_US);
-        TM1638_STB_LOW();
-        _delay_us(TM1638_DELAY_US);
-
-        /* write the first byte */
-        SPDR = _config;
-
-        /* set the command */
-        active_command = TM1638_WRITE_CONFIG;
-        state = 0;
-
-        /* enable SPI interrupt */
-        SPCR |= _BV(SPIE);
-    }
-}
-
-static void __TM1638_read_keys(void)
-{
-    if (!(GPIOR0 & TM1638_EV_BUSY))
-    {
-        GPIOR0 |= TM1638_EV_BUSY;
-        pending_command &= ~TM1638_READ_KEYS;
-
-        _delay_us(TM1638_DELAY_US);
-        TM1638_STB_LOW();
-        _delay_us(TM1638_DELAY_US);
-
-        /* write the first byte */
-        SPDR = TM1638_CMD_DATA | TM1638_DATA_READ | TM1638_DATA_INCR;
-
-        /* set the command */
-        active_command = TM1638_READ_KEYS;
-        state = 0;
-        data = (uint8_t *) &keys_buffer;
-
-        /* enable SPI interrupt */
-        SPCR |= _BV(SPIE);
-    }
-}
-
-static void __TM1638_write_segments(void)
-{
-    if (!(GPIOR0 & TM1638_EV_BUSY))
-    {
-        GPIOR0 |= TM1638_EV_BUSY;
-        pending_command &= ~TM1638_WRITE_SEGMENTS;
-
-        _delay_us(TM1638_DELAY_US);
-        TM1638_STB_LOW();
-        _delay_us(TM1638_DELAY_US);
-
-        /* write the first byte */
-        SPDR = TM1638_CMD_DATA | TM1638_DATA_WRITE | TM1638_DATA_INCR;
-
-        /* set the command */
-        active_command = TM1638_WRITE_SEGMENTS;
-        state = 0;
-        data = &segments_buffer[0];
-
-        /* enable SPI interrupt */
-        SPCR |= _BV(SPIE);
-    }
-}
-
-static void __TM1638_command_dispatch(void)
-{
-    if (!(GPIOR0 & TM1638_EV_BUSY))
-    {
-        _delay_us(TM1638_DELAY_US);
-        TM1638_STB_HIGH();
-
-        SPCR &= ~_BV(SPIE);
+        /* update pending and active commands */
         active_command = pending_command & ~(pending_command - 1);
         pending_command &= ~active_command;
+        state = 0;
 
-        switch (active_command)
+        if (TM1638_IDLE != active_command)
         {
-        case TM1638_WRITE_CONFIG:
-            __TM1638_write_config();
-            break;
+            GPIOR0 |= TM1638_EV_BUSY;
 
-        case TM1638_READ_KEYS:
-            __TM1638_read_keys();
-            break;
+            _delay_us(TM1638_DELAY_US);
+            TM1638_STB_LOW();
+            _delay_us(TM1638_DELAY_US);
 
-        case TM1638_WRITE_SEGMENTS:
-            __TM1638_write_segments();
-            break;
+            switch (active_command)
+            {
+            case TM1638_WRITE_CONFIG:
+                /* write the first byte */
+                SPDR = _config;
+                break;
+
+            case TM1638_READ_KEYS:
+                /* write the first byte */
+                SPDR = TM1638_CMD_DATA | TM1638_DATA_READ | TM1638_DATA_INCR;
+
+                /* set the command data */
+                data = (uint8_t *) &keys_buffer;
+                break;
+
+            case TM1638_WRITE_SEGMENTS:
+                /* write the first byte */
+                SPDR = TM1638_CMD_DATA | TM1638_DATA_WRITE | TM1638_DATA_INCR;
+
+                /* set the command data */
+                data = &segments_buffer[0];
+                break;
+            }
+
+            /* enable SPI interrupt */
+            SPCR |= _BV(SPIE);
         }
     }
 }
@@ -243,23 +191,8 @@ ISR(SPI_STC_vect)
         TM1638_STB_HIGH();
 
         SPCR &= ~_BV(SPIE);
-        active_command = pending_command & ~(pending_command - 1);
-        pending_command &= ~active_command;
 
-        switch (active_command)
-        {
-        case TM1638_WRITE_CONFIG:
-            __TM1638_write_config();
-            break;
-
-        case TM1638_READ_KEYS:
-            __TM1638_read_keys();
-            break;
-
-        case TM1638_WRITE_SEGMENTS:
-            __TM1638_write_segments();
-            break;
-        }
+        TM1638_command_dispatch();
     }
 }
 
@@ -269,7 +202,7 @@ static void TM1638_write_config(void)
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
         pending_command |= TM1638_WRITE_CONFIG;
-        __TM1638_write_config();
+        TM1638_command_dispatch();
     }
 }
 
@@ -278,7 +211,7 @@ void TM1638_read_keys(void)
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
         pending_command |= TM1638_READ_KEYS;
-        __TM1638_read_keys();
+        TM1638_command_dispatch();
     }
 }
 
@@ -287,7 +220,7 @@ void TM1638_write_segments(void)
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
         pending_command |= TM1638_WRITE_SEGMENTS;
-        __TM1638_write_segments();
+        TM1638_command_dispatch();
     }
 }
 
@@ -324,9 +257,9 @@ static int8_t keys_update_handler(struct timer_event * this_timer_event)
     /* set pending command bit */
     pending_command |= TM1638_READ_KEYS;
 
-    __TM1638_read_keys();
+    TM1638_command_dispatch();
 
-    /* advance this timer one second */
+    /* advance this timer */
     this_timer_event->tbtick += keys_update_interval;
 
     /* reschedule this timer */
@@ -338,9 +271,9 @@ static int8_t segments_update_handler(struct timer_event * this_timer_event)
     /* set pending command bit */
     pending_command |= TM1638_WRITE_SEGMENTS;
 
-    __TM1638_write_segments();
+    TM1638_command_dispatch();
 
-    /* advance this timer one second */
+    /* advance this timer */
     this_timer_event->tbtick += segments_update_interval;
 
     /* reschedule this timer */
@@ -360,6 +293,15 @@ static struct timer_event segments_update_event = {
 
 void TM1638_init(uint8_t keys_update_ms, uint8_t segments_update_ms)
 {
+    /* initialize SPI interface */
+    pinmap_set(PINMAP_MISO | PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
+    pinmap_dir(PINMAP_MISO, PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
+
+    SPCR = _BV(SPE)  | _BV(DORD) | _BV(MSTR)
+         | _BV(CPOL) | _BV(CPHA) | _BV(SPR1);
+    SPSR = _BV(SPI2X);
+
+    /* initialize variables */
     GPIOR0 &= ~TM1638_EV_BUSY;
     pending_command = TM1638_IDLE;
     active_command = TM1638_IDLE;
