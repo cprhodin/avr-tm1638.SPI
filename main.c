@@ -38,7 +38,7 @@
 #define MAX_COUNTS  5000U
 
 /* 1000 to 2000 us */
-static uint16_t pulse_us = (MAX_PULSE - MIN_PULSE) / 2 + MIN_PULSE;
+static uint16_t pulse_us = (MAX_PULSE + MIN_PULSE) / 2;
 
 
 static uint32_t buttons = 0UL;
