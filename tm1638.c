@@ -247,7 +247,7 @@ void TM1638_brightness(uint8_t const brightness)
 
 
 /*
- * timer events for periodic key scanning and display updates
+ * timer events for periodic key scanning
  */
 tbtick_t keys_update_interval;
 
@@ -390,6 +390,7 @@ void TM1638_write_digit(uint8_t const digit, int8_t const value)
         }
     }
 
+    /* schedule segment update */
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
         pending_command |= TM1638_WRITE_SEGMENTS;
