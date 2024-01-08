@@ -250,7 +250,6 @@ void TM1638_brightness(uint8_t const brightness)
  * timer events for periodic key scanning and display updates
  */
 tbtick_t keys_update_interval;
-tbtick_t segments_update_interval;
 
 static int8_t keys_update_handler(struct timer_event * this_timer_event)
 {
@@ -266,32 +265,13 @@ static int8_t keys_update_handler(struct timer_event * this_timer_event)
     return 1;
 }
 
-static int8_t segments_update_handler(struct timer_event * this_timer_event)
-{
-    /* set pending command bit */
-    pending_command |= TM1638_WRITE_SEGMENTS;
-
-    TM1638_command_dispatch();
-
-    /* advance this timer */
-    this_timer_event->tbtick += segments_update_interval;
-
-    /* reschedule this timer */
-    return 1;
-}
-
 static struct timer_event keys_update_event = {
     .next = &keys_update_event,
     .handler = keys_update_handler,
 };
 
-static struct timer_event segments_update_event = {
-    .next = &segments_update_event,
-    .handler = segments_update_handler,
-};
 
-
-void TM1638_init(uint8_t keys_update_ms, uint8_t segments_update_ms)
+void TM1638_init(uint8_t keys_update_ms)
 {
     /* initialize SPI interface */
     pinmap_set(PINMAP_MISO | PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
@@ -316,7 +296,6 @@ void TM1638_init(uint8_t keys_update_ms, uint8_t segments_update_ms)
     TM1638_write_segments();
 
     keys_update_interval = TBTICKS_FROM_MS(keys_update_ms);
-    segments_update_interval = TBTICKS_FROM_MS(segments_update_ms);
 
     /*
      * schedule key scan
@@ -325,15 +304,6 @@ void TM1638_init(uint8_t keys_update_ms, uint8_t segments_update_ms)
     {
         keys_update_event.tbtick = keys_update_interval;
         schedule_timer_event(&keys_update_event, NULL);
-    }
-
-    /*
-     * schedule display update, offset by 1/2 key scan
-     */
-    if (0 != segments_update_ms)
-    {
-        segments_update_event.tbtick = keys_update_interval / 2;
-        schedule_timer_event(&segments_update_event, &keys_update_event);
     }
 }
 

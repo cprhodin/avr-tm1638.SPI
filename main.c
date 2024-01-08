@@ -173,7 +173,7 @@ void main(void)
     }
     /* interrupts are enabled */
 
-    TM1638_init(10, 20);
+    TM1638_init(10);
 
     for (;;)
     {

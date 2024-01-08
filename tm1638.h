@@ -27,7 +27,7 @@
 /*
  * Initialize TM1638 LED controller
  */
-extern void TM1638_init(uint8_t keys_update_ms, uint8_t segments_update_ms);
+extern void TM1638_init(uint8_t keys_update_ms);
 
 /*
  * Configure display
