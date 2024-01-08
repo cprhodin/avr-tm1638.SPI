@@ -1,0 +1,5 @@
+**/.depends
+**/.objects
+avr-tm1638.SPI
+avr-tm1638.SPI.dump
+librb/librb.a
