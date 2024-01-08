@@ -65,7 +65,7 @@
 #define TM1638_STB_LOW()    pinmap_clear(TM1638_STB)
 
 /* Fan PWM output */
-#define FAN_OUT PINMAP_OC1A
+#define SERVO_OUT PINMAP_OC1A
 
 
 /*
@@ -101,6 +101,5 @@ extern void timers_init(void) __attribute__((__constructor__));
  * these functions never return
  */
 extern void main(void) __attribute__((__noreturn__));
-extern void cmdline(void) __attribute__((__noreturn__));
 
 #endif /* _PROJECT_H_ */

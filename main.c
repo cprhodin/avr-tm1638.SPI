@@ -29,30 +29,19 @@
 #include "tm1638.h"
 
 
-#define PWM_FREQ    100UL
+#define PWM_FREQ    100U
+#define MIN_PULSE   500U  // in us
+#define MAX_PULSE   2500U  // in us
 
-#define PWM_PERIOD  20000UL
-#define MIN_FAN_RPM 840U
-#define MAX_FAN_RPM 2200U
-#define MIN_PULSE   1900UL  // 10%
-#define MAX_PULSE   14900UL // 75%
+#define PWM_COUNTS  20000U
+#define MIN_COUNTS  1000U
+#define MAX_COUNTS  5000U
 
-
-//  q = (x >> 3)
-//    - (x >> 16)
-//    + (x >> 19)
-//    - (x >> 22)
-//    + (x >> 25)
-//    - (x >> 28)
-//
-//  r = x - (q * 10)
-//  return q, r
+/* 1000 to 2000 us */
+static uint16_t pulse_us = (MAX_PULSE - MIN_PULSE) / 2 + MIN_PULSE;
 
 
-/* 840 slow, 2200 fast */
-static uint16_t rpm = 0U;
-
-static uint32_t buttons = 0U;
+static uint32_t buttons = 0UL;
 
 static uint32_t process_buttons(void)
 {
@@ -64,137 +53,110 @@ static uint32_t process_buttons(void)
 }
 
 
-void setRPM(uint16_t rpm)
+void set_servo(uint16_t pulse_us)
 {
-    uint16_t pulse;
+    uint16_t pulse_counts;
 
-    if (0U == rpm)
-    {
-        pulse = 0U;
-    }
-    else
-    {
-        /* limit RPM to supported range */
-        rpm = limit_range(MIN_FAN_RPM, rpm, MAX_FAN_RPM);
+    /* interpolate pulse width */
+    pulse_counts = (uint16_t) (MIN_COUNTS + (((uint32_t) (pulse_us - MIN_PULSE)
+                                            * (uint32_t) (MAX_COUNTS - MIN_COUNTS))
+                                             / (uint32_t) (MAX_PULSE - MIN_PULSE)));
 
-        /* interpolate pulse width */
-        pulse = (uint16_t) (MIN_PULSE +
-                            (((uint32_t) (rpm - MIN_FAN_RPM) * (uint32_t) (MAX_PULSE - MIN_PULSE)) /
-                             (uint32_t) (MAX_FAN_RPM - MIN_FAN_RPM))
-                           );
-    }
-
-    OCR1A = 19999 - pulse;
+    OCR1A = 19999 - pulse_counts;
 }
 
 
-static void update_rpm(void)
+static void update_servo(void)
 {
-    uint16_t pw = rpm;
-
-    /* break up pulse width into decimal digits */
-    uint8_t ones   = pw % 10;
-    pw /= 10;
-    uint8_t tens    = pw % 10;
-    pw /= 10;
-    uint8_t hundreds = pw % 10;
-    pw /= 10;
-    uint8_t thousands = pw % 10;
-    pw /= 10;
-
     /* process button pushes */
     uint32_t changed_buttons = process_buttons();
 
-    if (0x0002 & changed_buttons)
+    if (0x00020000 & changed_buttons)
     {
-        thousands = (thousands + 1) % 10;
+        pulse_us -= 1000;
     }
 
-    if (0x0020 & changed_buttons)
+    if (0x00000002 & changed_buttons)
     {
-        hundreds = (hundreds + 1) % 10;
+        pulse_us += 1000;
     }
 
-    if (0x0200 & changed_buttons)
+    if (0x00200000 & changed_buttons)
     {
-        tens = (tens + 1) % 10;
+        pulse_us -= 100;
     }
 
-    if (0x2000 & changed_buttons)
+    if (0x00000020 & changed_buttons)
     {
-        ones = (ones + 1) % 10;
+        pulse_us += 100;
     }
 
-    /* assemble pulse width from decimal digits */
-    rpm = (thousands  * 1000)
-        + (hundreds * 100)
-        + (tens   * 10)
-        + (ones * 1);
+    if (0x02000000 & changed_buttons)
+    {
+        pulse_us -= 10;
+    }
 
-    if (rpm < 1000)
+    if (0x00000200 & changed_buttons)
+    {
+        pulse_us += 10;
+    }
+
+    if (0x20000000 & changed_buttons)
+    {
+        pulse_us -= 1;
+    }
+
+    if (0x00002000 & changed_buttons)
+    {
+        pulse_us += 1;
+    }
+
+    pulse_us = limit_range(MIN_PULSE, pulse_us, MAX_PULSE);
+
+    if (pulse_us < 1000)
     {
         TM1638_write_digit(3, -1);
     }
     else
     {
-        TM1638_write_digit(3, thousands);
+        TM1638_write_digit(3, (pulse_us / 1000) % 10);
     }
 
-    if (rpm < 100)
+    if (pulse_us < 100)
     {
         TM1638_write_digit(2, -1);
     }
     else
     {
-        TM1638_write_digit(2, hundreds);
+        TM1638_write_digit(2, (pulse_us / 100) % 10);
     }
 
-    if (rpm < 10)
+    if (pulse_us < 10)
     {
         TM1638_write_digit(1, -1);
     }
     else
     {
-        TM1638_write_digit(1, tens);
+        TM1638_write_digit(1, (pulse_us / 10) % 10);
     }
 
-    TM1638_write_digit(0, ones);
+    TM1638_write_digit(0, pulse_us % 10);
 
-    setRPM(rpm);
+    set_servo(pulse_us);
 }
 
-void fan_init(void)
+void servo_init(void)
 {
-    /* initialize fan output pin */
-    pinmap_clear(FAN_OUT);
-    pinmap_dir(0, FAN_OUT);
+    /* initialize servo output pin */
+    pinmap_clear(SERVO_OUT);
+    pinmap_dir(0, SERVO_OUT);
 
     // Timer 1, Fast PWM mode 14, WGM = 1:1:1:0, clk/8,
     TCCR1A = 0xC2;  // COM1A1 = 1, COM1A0 = 0, WGM11 = 1, WGM10 = 0
     TCCR1B = 0x1A;  // WGM13 = 1, WGM12 = 1, CS = 2
     TCCR1C = 0x00;
-    ICR1   = 19999;
-    OCR1A  = 9999;
-}
-
-/*
- * interrupt disabled
- * enabled
- * LSb first
- * Master
- * Clk/64
- * CPOL=1
- * CPHA=1
- */
-
-void spi_init(void)
-{
-    pinmap_set(PINMAP_MISO | PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
-    pinmap_dir(PINMAP_MISO, PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
-
-    SPCR = _BV(SPE)  | _BV(DORD) | _BV(MSTR)
-         | _BV(CPOL) | _BV(CPHA) | _BV(SPR1);
-    SPSR = _BV(SPI2X);
+    ICR1   = PWM_COUNTS - 1;
+    OCR1A  = (MAX_COUNTS - MIN_COUNTS) / 2;
 }
 
 
@@ -205,11 +167,9 @@ void main(void)
      */
     ATOMIC_BLOCK(ATOMIC_FORCEON)
     {
-        GPIOR0 = 0;
         tbtick_init();
         tick_init();
-        fan_init();
-        spi_init();
+        servo_init();
     }
     /* interrupts are enabled */
 
@@ -217,13 +177,8 @@ void main(void)
 
     for (;;)
     {
-        /* read buttons and update rpm */
-        update_rpm();
+        /* read buttons and update servo */
+        update_servo();
     }
-
-    /*
-     * run command line interface
-     */
-    cmdline();
 }
 

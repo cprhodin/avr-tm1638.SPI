@@ -419,5 +419,10 @@ void TM1638_write_digit(uint8_t const digit, int8_t const value)
             segments >>= 1;
         }
     }
+
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+    {
+        pending_command |= TM1638_WRITE_SEGMENTS;
+    }
 }
 
