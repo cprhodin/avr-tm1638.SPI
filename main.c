@@ -41,15 +41,15 @@
 static uint16_t pulse_us = (MAX_PULSE + MIN_PULSE) / 2;
 
 
-static uint32_t buttons = 0UL;
+static uint32_t keys = 0UL;
 
-static uint32_t process_buttons(void)
+static uint32_t process_keys(void)
 {
-    uint32_t const last_buttons = buttons;
+    uint32_t const last_keys = keys;
 
-    buttons = TM1638_get_keys();
+    keys = TM1638_get_keys();
 
-    return (last_buttons ^ buttons) & buttons;
+    return (last_keys ^ keys) & keys;
 }
 
 
@@ -59,8 +59,8 @@ void set_servo(uint16_t pulse_us)
 
     /* interpolate pulse width */
     pulse_counts = (uint16_t) (MIN_COUNTS + (((uint32_t) (pulse_us - MIN_PULSE)
-                                            * (uint32_t) (MAX_COUNTS - MIN_COUNTS))
-                                             / (uint32_t) (MAX_PULSE - MIN_PULSE)));
+                               * (uint32_t) (MAX_COUNTS - MIN_COUNTS))
+                               / (uint32_t) (MAX_PULSE - MIN_PULSE)));
 
     OCR1A = 19999 - pulse_counts;
 }
@@ -69,7 +69,7 @@ void set_servo(uint16_t pulse_us)
 static void update_servo(void)
 {
     /* process button pushes */
-    uint32_t changed_buttons = process_buttons();
+    uint32_t changed_buttons = process_keys();
 
     if (0x00020000 & changed_buttons)
     {
@@ -177,7 +177,7 @@ void main(void)
 
     for (;;)
     {
-        /* read buttons and update servo */
+        /* read keys and update servo */
         update_servo();
     }
 }

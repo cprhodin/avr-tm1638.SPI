@@ -277,6 +277,10 @@ void TM1638_init(uint8_t keys_update_ms)
     pinmap_set(PINMAP_MISO | PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
     pinmap_dir(PINMAP_MISO, PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
 
+    /*
+     * LSb first, Master, Data changes on falling edge and latches
+     * on rising edge, CPU clock/32
+     */
     SPCR = _BV(SPE)  | _BV(DORD) | _BV(MSTR)
          | _BV(CPOL) | _BV(CPHA) | _BV(SPR1);
     SPSR = _BV(SPI2X);
