@@ -27,29 +27,35 @@
 #include "timer.h"
 #include "tick.h"
 #include "tm1638.h"
+#include "bibase.h"
 
 
 #define PWM_FREQ    100U
 #define MIN_PULSE   500U  // in us
-#define MAX_PULSE   2500U  // in us
+#define MAX_PULSE   2500U // in us
 
 #define PWM_COUNTS  20000U
-#define MIN_COUNTS  1000U
-#define MAX_COUNTS  5000U
+#define MIN_COUNTS  (2 * MIN_PULSE)
+#define MAX_COUNTS  (2 * MAX_PULSE)
 
 /* 1000 to 2000 us */
 static uint16_t pulse_us = (MAX_PULSE + MIN_PULSE) / 2;
 
+static uint8_t brightness = TM1638_MAX_BRIGHTNESS / 2;
 
 static uint32_t keys = 0UL;
 
 static uint32_t process_keys(void)
 {
-    uint32_t const last_keys = keys;
+    uint32_t const new_keys     = TM1638_get_keys();
+    uint32_t const keys_changed = new_keys ^ keys;
 
-    keys = TM1638_get_keys();
+    keys = new_keys;
 
-    return (last_keys ^ keys) & keys;
+    uint32_t keys_down = keys_changed & keys;
+    uint32_t keys_up   = keys_changed & ~keys;
+
+    return keys_down;
 }
 
 
@@ -57,12 +63,19 @@ void set_servo(uint16_t pulse_us)
 {
     uint16_t pulse_counts;
 
-    /* interpolate pulse width */
-    pulse_counts = (uint16_t) (MIN_COUNTS + (((uint32_t) (pulse_us - MIN_PULSE)
-                               * (uint32_t) (MAX_COUNTS - MIN_COUNTS))
-                               / (uint32_t) (MAX_PULSE - MIN_PULSE)));
+    if (0U == pulse_us)
+    {
+        pulse_counts = 0U;
+    }
+    else
+    {
+	    /* interpolate pulse width */
+	    pulse_counts = (uint16_t) (MIN_COUNTS + (((uint32_t) (pulse_us - MIN_PULSE)
+	                               * (uint32_t) (MAX_COUNTS - MIN_COUNTS))
+	                               / (uint32_t) (MAX_PULSE - MIN_PULSE)));
+    }
 
-    OCR1A = 19999 - pulse_counts;
+    OCR1A = (PWM_COUNTS - 1) - pulse_counts;
 }
 
 
@@ -71,76 +84,136 @@ static void update_servo(void)
     /* process button pushes */
     uint32_t changed_buttons = process_keys();
 
-    if (0x00020000 & changed_buttons)
+#if 0
+    if (0 != changed_buttons)
     {
-        pulse_us -= 1000;
+        printf("Button Down: %08lX\n", changed_buttons);
+    }
+#endif
+
+    if (0x00000004 & changed_buttons)
+    {
+        /* ON */
+        TM1638_enable(1);
     }
 
-    if (0x00000002 & changed_buttons)
+    if (0x00040000 & changed_buttons)
     {
-        pulse_us += 1000;
+        /* OFF */
+        TM1638_enable(0);
     }
 
-    if (0x00200000 & changed_buttons)
+    if (0x40000000 & changed_buttons)
     {
-        pulse_us -= 100;
+        /* dimmer */
+        if (brightness > 0)
+        {
+            brightness--;
+        }
+
+        TM1638_brightness(brightness);
     }
 
-    if (0x00000020 & changed_buttons)
+    if (0x00004000 & changed_buttons)
     {
-        pulse_us += 100;
+        /* brighter */
+        if (brightness < TM1638_MAX_BRIGHTNESS)
+        {
+            brightness++;
+        }
+
+        TM1638_brightness(brightness);
     }
 
-    if (0x02000000 & changed_buttons)
+    uint16_t new_pulse_us = pulse_us;
+
+    if      (0x22220000 & changed_buttons)
     {
-        pulse_us -= 10;
+        /*
+         * down button pressed
+         */
+
+        if (0x00020000 & changed_buttons)
+        {
+            new_pulse_us = pulse_us - 1000;
+        }
+
+        if (0x00200000 & changed_buttons)
+        {
+            new_pulse_us = pulse_us - 100;
+        }
+
+        if (0x02000000 & changed_buttons)
+        {
+            new_pulse_us = pulse_us - 10;
+        }
+
+        if (0x20000000 & changed_buttons)
+        {
+            new_pulse_us = pulse_us - 1;
+        }
+
+        /*
+         * if adjusted RPM is less than minimum or underflowed
+         */
+        if ((new_pulse_us > pulse_us) || (new_pulse_us < MIN_PULSE))
+        {
+            new_pulse_us = 0;
+        }
+    }
+    else if (0x00002222 & changed_buttons)
+    {
+        /*
+         * up button pressed
+         */
+
+        if (pulse_us == 0)
+        {
+            new_pulse_us = MIN_PULSE;
+        }
+        else
+        {
+            if (0x00000002 & changed_buttons)
+            {
+                new_pulse_us = pulse_us + 1000;
+            }
+
+            if (0x00000020 & changed_buttons)
+            {
+                new_pulse_us = pulse_us + 100;
+            }
+
+            if (0x00000200 & changed_buttons)
+            {
+                new_pulse_us = pulse_us + 10;
+            }
+
+            if (0x00002000 & changed_buttons)
+            {
+                new_pulse_us = pulse_us + 1;
+            }
+
+            /*
+             * if adjusted RPM is greater than maximum or overflowed
+             */
+            if ((new_pulse_us < pulse_us) || (new_pulse_us > MAX_PULSE))
+            {
+                new_pulse_us = MAX_PULSE;
+            }
+        }
     }
 
-    if (0x00000200 & changed_buttons)
-    {
-        pulse_us += 10;
-    }
+    pulse_us = new_pulse_us;
 
-    if (0x20000000 & changed_buttons)
-    {
-        pulse_us -= 1;
-    }
+    uint8_t dec[4] = { 0, 0, 0, 0 };
 
-    if (0x00002000 & changed_buttons)
-    {
-        pulse_us += 1;
-    }
+    uint8_t n_digit = bibase(0, pulse_us >> 8, dec, 246);
+    n_digit = bibase(n_digit, pulse_us, dec, 246);
 
-    pulse_us = limit_range(MIN_PULSE, pulse_us, MAX_PULSE);
-
-    if (pulse_us < 1000)
-    {
-        TM1638_write_digit(3, -1);
-    }
-    else
-    {
-        TM1638_write_digit(3, (pulse_us / 1000) % 10);
-    }
-
-    if (pulse_us < 100)
-    {
-        TM1638_write_digit(2, -1);
-    }
-    else
-    {
-        TM1638_write_digit(2, (pulse_us / 100) % 10);
-    }
-
-    if (pulse_us < 10)
-    {
-        TM1638_write_digit(1, -1);
-    }
-    else
-    {
-        TM1638_write_digit(1, (pulse_us / 10) % 10);
-    }
-
-    TM1638_write_digit(0, pulse_us % 10);
+    TM1638_write_digit(3, (n_digit > 3) ? dec[3] : -1);
+    TM1638_write_digit(2, (n_digit > 2) ? dec[2] : -1);
+    TM1638_write_digit(1, (n_digit > 1) ? dec[1] : -1);
+    TM1638_write_digit(0, dec[0]);
 
     set_servo(pulse_us);
 }
@@ -173,7 +246,9 @@ void main(void)
     }
     /* interrupts are enabled */
 
+    /* initialize and enable the TM1638 */
     TM1638_init(10);
+    TM1638_enable(1);
 
     for (;;)
     {

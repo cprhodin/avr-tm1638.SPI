@@ -67,10 +67,9 @@ static uint8_t segments_buffer[16];
 static uint32_t keys_buffer = 0;
 
 /*
- * default to display on at 1/2 maximum brightness
+ * default to display off at 1/2 maximum brightness
  */
 static uint8_t _config = TM1638_CMD_DISPLAY
-                       | TM1638_DISPLAY_ON
                        | (TM1638_MAX_BRIGHTNESS / 2);
 
 /*
