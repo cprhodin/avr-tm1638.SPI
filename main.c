@@ -47,13 +47,12 @@ static uint32_t keys = 0UL;
 
 static uint32_t process_keys(void)
 {
-    uint32_t const new_keys     = TM1638_get_keys();
+    uint32_t const new_keys = TM1638_get_keys();
     uint32_t const keys_changed = new_keys ^ keys;
-
     keys = new_keys;
 
     uint32_t keys_down = keys_changed & keys;
-    uint32_t keys_up   = keys_changed & ~keys;
+    uint32_t keys_up = keys_changed & ~keys;
 
     return keys_down;
 }
@@ -228,8 +227,8 @@ void servo_init(void)
     TCCR1A = 0xC2;  // COM1A1 = 1, COM1A0 = 0, WGM11 = 1, WGM10 = 0
     TCCR1B = 0x1A;  // WGM13 = 1, WGM12 = 1, CS = 2
     TCCR1C = 0x00;
-    ICR1   = PWM_COUNTS - 1;
-    OCR1A  = (MAX_COUNTS - MIN_COUNTS) / 2;
+    ICR1 = PWM_COUNTS - 1;
+    OCR1A = (MAX_COUNTS - MIN_COUNTS) / 2;
 }
 
 
