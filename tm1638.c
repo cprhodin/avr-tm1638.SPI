@@ -273,8 +273,8 @@ static struct timer_event keys_update_event = {
 void TM1638_init(uint8_t keys_update_ms)
 {
     /* initialize SPI interface */
-    pinmap_set(PINMAP_MISO | PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
-    pinmap_dir(PINMAP_MISO, PINMAP_SCK | PINMAP_MOSI | PINMAP_SS);
+    pinmap_set(PINMAP_MISO | PINMAP_SCK | PINMAP_MOSI | PINMAP_SS | TM1638_STB);
+    pinmap_dir(PINMAP_MISO, PINMAP_SCK | PINMAP_MOSI | PINMAP_SS | TM1638_STB);
 
     /*
      * LSb first, Master, Data changes on falling edge and latches
