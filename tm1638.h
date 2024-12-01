@@ -19,7 +19,14 @@
 
 #include <stdint.h>
 
-// Main Settings
+#include "spi.h"
+
+#define TM1638_SPCR ( (SPI_MSTR_LSB | SPI_MODE3 | SPI_DIV32)       & 0xFF)
+#define TM1638_SPSR (((SPI_MSTR_LSB | SPI_MODE3 | SPI_DIV32) >> 8) & 0xFF)
+
+/*
+ * Main Settings
+ */
 #define TM1638_MAX_BRIGHTNESS   7
 #define TM1638_MAX_DIGIT        9
 #define TM1638_MAX_VALUE        15
@@ -27,7 +34,7 @@
 /*
  * Initialize TM1638 LED controller
  */
-extern void TM1638_init(uint8_t keys_update_ms);
+extern void TM1638_init(uint8_t const keys_update_ms);
 
 /*
  * Configure display

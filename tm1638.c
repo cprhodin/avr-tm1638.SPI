@@ -23,6 +23,7 @@
 #include <avr/pgmspace.h>
 #include <util/delay.h>
 
+#include "spi.h"
 #include "timer.h"
 #include "pinmap.h"
 #include "tm1638.h"
@@ -86,7 +87,7 @@ static void TM1638_command_dispatch(void)
     if (!(GPIOR0 & TM1638_EV_BUSY))
     {
         /* update pending and active commands */
-        active_command = pending_command & ~(pending_command - 1);
+        active_command = pending_command & -pending_command;
         pending_command &= ~active_command;
         state = 0;
 
@@ -270,7 +271,7 @@ static struct timer_event keys_update_event = {
 };
 
 
-void TM1638_init(uint8_t keys_update_ms)
+void TM1638_init(uint8_t const keys_update_ms)
 {
     /* initialize SPI interface */
     pinmap_set(PINMAP_MISO | PINMAP_SCK | PINMAP_MOSI | PINMAP_SS | TM1638_STB);
@@ -280,9 +281,8 @@ void TM1638_init(uint8_t keys_update_ms)
      * LSb first, Master, Data changes on falling edge and latches
      * on rising edge, CPU clock/32
      */
-    SPCR = _BV(SPE)  | _BV(DORD) | _BV(MSTR)
-         | _BV(CPOL) | _BV(CPHA) | _BV(SPR1);
-    SPSR = _BV(SPI2X);
+    SPCR = TM1638_SPCR;
+    SPSR = TM1638_SPSR;
 
     /* initialize variables */
     GPIOR0 &= ~TM1638_EV_BUSY;

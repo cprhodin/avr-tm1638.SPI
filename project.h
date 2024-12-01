@@ -50,6 +50,10 @@
 
 #define TX_BUF_SIZE (128)
 
+/*
+ * I2C interface
+ */
+#define TWI_FREQ 100000UL
 
 /*
  * Project pin assignments.
@@ -59,7 +63,7 @@
 #define SPEAKER_OUT PINMAP_D4
 
 /* TM1638 pins */
-#define TM1638_STB PINMAP_D2
+#define TM1638_STB PINMAP_D6
 
 #define TM1638_STB_HIGH()   pinmap_set(TM1638_STB)
 #define TM1638_STB_LOW()    pinmap_clear(TM1638_STB)

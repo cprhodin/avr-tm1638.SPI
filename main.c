@@ -28,6 +28,7 @@
 #include "tick.h"
 #include "tm1638.h"
 #include "bibase.h"
+#include "twi.h"
 
 
 #define PWM_FREQ    100U
@@ -232,6 +233,149 @@ void servo_init(void)
 }
 
 
+uint8_t get_status(uint8_t command)
+{
+    uint8_t twcr;
+    uint8_t twsr;
+
+    TWCR = command;
+
+    do
+    {
+        twcr = TWCR;
+    }
+    while (!(twcr & _BV(TWINT)));
+
+    twsr = TWSR;
+
+    return twsr;
+}
+
+
+void hd44780_write_data(uint8_t data)
+{
+    uint8_t status;
+    uint8_t nibble;
+
+    status = get_status(_BV(TWINT) | _BV(TWSTA) | _BV(TWEN));
+    TWDR   = 0x40;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+
+    nibble = 0x40 | ((data >> 4) & 0x0F);
+
+    TWDR   = nibble;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+    TWDR   = nibble | 0x10;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+    TWDR   = nibble;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+
+    nibble = 0x40 | ( data       & 0x0F);
+
+    TWDR   = nibble | 0x10;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+    TWDR   = nibble;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+
+    TWCR   = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN);
+    while (TWCR & _BV(TWSTO));
+}
+
+
+void hd44780_write_instr(uint8_t instr)
+{
+    uint8_t status;
+    uint8_t nibble;
+
+    status = get_status(_BV(TWINT) | _BV(TWSTA) | _BV(TWEN));
+    TWDR   = 0x40;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+
+    nibble = (instr >> 4) & 0x0F;
+
+    TWDR   = nibble;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+    TWDR   = nibble | 0x10;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+    TWDR   = nibble;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+
+    nibble =  instr       & 0x0F;
+
+    TWDR   = nibble | 0x10;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+    TWDR   = nibble;
+    status = get_status(_BV(TWINT) |              _BV(TWEN));
+
+    TWCR   = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN);
+    while (TWCR & _BV(TWSTO));
+}
+
+
+void hd44780(void)
+{
+    uint8_t status;
+
+    timer_delay(TBTICKS_FROM_MS(15));
+
+    status = get_status(_BV(TWINT) | _BV(TWSTA) | _BV(TWEN));
+    TWDR   = 0x40;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+    TWDR   = 0x00;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+    TWDR   = 0x13;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+    TWDR   = 0x03;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+
+    timer_delay(TBTICKS_FROM_US(4100));
+
+    TWDR   = 0x13;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+    TWDR   = 0x03;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+
+    timer_delay(TBTICKS_FROM_US(100));
+
+    TWDR   = 0x13;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+    TWDR   = 0x03;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+
+    timer_delay(TBTICKS_FROM_MS(2));
+
+    TWDR   = 0x12;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+    TWDR   = 0x02;
+    status = get_status(_BV(TWINT) | _BV(TWEN));
+
+    TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN);
+    while (TWCR & _BV(TWSTO));
+
+    timer_delay(TBTICKS_FROM_MS(2));
+
+    hd44780_write_instr(0x28);
+    timer_delay(TBTICKS_FROM_MS(2));
+
+    hd44780_write_instr(0x04);
+    timer_delay(TBTICKS_FROM_MS(2));
+
+//    hd44780_write_instr(0x0C);
+//    timer_delay(TBTICKS_FROM_MS(2));
+
+    hd44780_write_instr(0x0E);
+    timer_delay(TBTICKS_FROM_MS(2));
+
+    hd44780_write_instr(0x01);
+    timer_delay(TBTICKS_FROM_MS(2));
+
+    for (uint8_t c = 0x20; c < 0x70; c++)
+    {
+        hd44780_write_data(c);
+    }
+}
+
+
 void main(void)
 {
     /*
@@ -242,8 +386,11 @@ void main(void)
         tbtick_init();
         tick_init();
         servo_init();
+        twi_init();
     }
     /* interrupts are enabled */
+
+//    hd44780();
 
     /* initialize and enable the TM1638 */
     TM1638_init(10);
